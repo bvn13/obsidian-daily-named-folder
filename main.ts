@@ -57,25 +57,24 @@ export default class DailyNamedFolderPlugin extends Plugin {
 
 					// get the template content
 					const templateFile = this.app.vault.getAbstractFileByPath(this.settings.template);
+					let rawTemplate = await this.app.vault.read(templateFile);
+					const template = this.processTemplate(rawTemplate);
+					// copy the template content to the new daily folder file
+					// make daily directory
+					await this.app.vault.createFolder(foldername);
 					if (templateFile instanceof TFile) {
-						let rawTemplate = await this.app.vault.read(templateFile);
-						const template = this.processTemplate(rawTemplate);
-						// copy the template content to the new daily folder file
-						// make daily directory
-						await this.app.vault.createFolder(foldername);
 						// make daily note inside the daily directory and  fill it with the template
 						await this.app.vault.create(foldername + filename, template);
-						// open the daily folder to active leaf
-						await this.app.workspace.openLinkText(filename, foldername);
-						// show in file explorer
-						this.app.commands.executeCommandById('file-explorer:reveal-active-file');
-						// we are done, so let's notify user
-						new Notice('Created new daily folder');
-					} else { // if template file has been moved/renamed/deleted
-						new Notice('Oops, something went wrong trying to make a daily-named-folder!');
-						throw "Something went wrong trying to get the template file for daily-named-folder. " +
-							"Attempted to open template at " + this.settings.template;
+					} else {
+						// make daily note inside the daily directory and  fill it with empty text
+						await this.app.vault.create(foldername + filename, '');
 					}
+					// open the daily folder to active leaf
+					await this.app.workspace.openLinkText(filename, foldername);
+					// show in file explorer
+					this.app.commands.executeCommandById('file-explorer:reveal-active-file');
+					// we are done, so let's notify user
+					new Notice('Created new daily folder');
 				}
 			},
 		});
@@ -410,3 +409,4 @@ class DailyFolderSettingTab extends PluginSettingTab {
 				}));
 	}
 }
+
