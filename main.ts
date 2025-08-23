@@ -6,6 +6,7 @@ interface DailyFolderSettings {
 	format: string;
 	description: boolean;
 	root: string;
+	useTemplate: boolean;
 	template: string;
 }
 
@@ -13,6 +14,7 @@ const DEFAULT_SETTINGS: DailyFolderSettings = {
 	format: '',
 	description: true,
 	root: '',
+	useTemplate: true,
 	template: ''
 };
 
@@ -44,8 +46,26 @@ export default class DailyNamedFolderPlugin extends Plugin {
 					this.app.commands.executeCommandById('file-explorer:reveal-active-file'); // show in file explorer
 					new Notice('Opened daily folder');
 				} else {  // we have to make a new daily folder, as it does not exist yet.
-					let folderDescription:string  = '';
 
+					// first, lets get the template (and check if it is OK)
+					let template;
+					if (this.settings.useTemplate) {
+						// get the template content
+						const templateFile = this.app.vault.getAbstractFileByPath(this.settings.template);
+						if (templateFile instanceof TFile) {
+							let rawTemplate = await this.app.vault.read(templateFile);
+							template = this.processTemplate(rawTemplate);
+						} else { // if template file has been moved/renamed/deleted
+							new Notice('Oops, unable to find specified template file for daily-named-folder!');
+							throw "Something went wrong trying to get the template file for daily-named-folder. " +
+								"Attempted to open template at " + this.settings.template;
+						}
+					} else {
+						template = ""; // substitute empty string as template
+					}
+
+					// then let's prompt the user for the desired folder name/description
+					let folderDescription:string  = '';
 					if (this.settings.description) {
 						// get the folder description from a modal panel
 						folderDescription = await new descriptionModal(this.app, this.settings,
@@ -55,27 +75,17 @@ export default class DailyNamedFolderPlugin extends Plugin {
 					let foldername = this.makeDailyFolderPath() + folderDescription + '/';
 					let filename = this.makeDailyNoteBaseName() + folderDescription + '.md';
 
-					// get the template content
-					const templateFile = this.app.vault.getAbstractFileByPath(this.settings.template);
-					if (templateFile instanceof TFile) {
-						let rawTemplate = await this.app.vault.read(templateFile);
-						const template = this.processTemplate(rawTemplate);
-						// copy the template content to the new daily folder file
-						// make daily directory
-						await this.app.vault.createFolder(foldername);
-						// make daily note inside the daily directory and  fill it with the template
-						await this.app.vault.create(foldername + filename, template);
-						// open the daily folder to active leaf
-						await this.app.workspace.openLinkText(filename, foldername);
-						// show in file explorer
-						this.app.commands.executeCommandById('file-explorer:reveal-active-file');
-						// we are done, so let's notify user
-						new Notice('Created new daily folder');
-					} else { // if template file has been moved/renamed/deleted
-						new Notice('Oops, something went wrong trying to make a daily-named-folder!');
-						throw "Something went wrong trying to get the template file for daily-named-folder. " +
-							"Attempted to open template at " + this.settings.template;
-					}
+					// copy the template content to the new daily folder file
+					// make daily directory
+					await this.app.vault.createFolder(foldername);
+					// make daily note inside the daily directory and  fill it with the template
+					await this.app.vault.create(foldername + filename, template);
+					// open the daily folder to active leaf
+					await this.app.workspace.openLinkText(filename, foldername);
+					// show in file explorer
+					this.app.commands.executeCommandById('file-explorer:reveal-active-file');
+					// we are done, so let's notify user
+					new Notice('Created new daily folder');
 				}
 			},
 		});
@@ -391,22 +401,39 @@ class DailyFolderSettingTab extends PluginSettingTab {
 					}
 				}));
 
-		let templateSetting = new Setting(containerEl)
-			.setName('Template file location')
-			.setDesc("Choose the file to use as a template. (must end with .md)")
-			.addText(text => text
-				.setPlaceholder('Example: templ/daily_log.md')
-				.setValue(this.plugin.settings.template)
+		new Setting(containerEl)
+			.setName('Enable template file')
+			.setDesc("Specify a template file to be used when creating a Daily Folder. Disabling " +
+				"this option will lead to an empty file being created instead."
+			)
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.useTemplate)
 				.onChange(async (value) => {
-					//console.log('[DAILY FOLDER] template set: ' + value);
-					if (await this.app.vault.adapter.exists(value) && value.endsWith('.md')) {
-						templateSetting.settingEl.classList.remove('invalid-path');
-						console.log('Setting Daily Folder template to: ', value)
-						this.plugin.settings.template = value;
-						await this.plugin.saveSettings();
-					} else {
-						templateSetting.setClass('invalid-path');
-					}
+					this.plugin.settings.useTemplate = value;
+					await this.plugin.saveSettings();
+
+					// Re-render the settings page
+					this.display();
 				}));
+
+		if (this.plugin.settings.useTemplate){
+			let templateSetting = new Setting(containerEl)
+				.setName('Template file location')
+				.setDesc("Choose the file to use as a template. (must end with .md)")
+				.addText(text => text
+					.setPlaceholder('Example: templ/daily_log.md')
+					.setValue(this.plugin.settings.template)
+					.onChange(async (value) => {
+						//console.log('[DAILY FOLDER] template set: ' + value);
+						if (await this.app.vault.adapter.exists(value) && value.endsWith('.md')) {
+							templateSetting.settingEl.classList.remove('invalid-path');
+							console.log('Setting Daily Folder template to: ', value)
+							this.plugin.settings.template = value;
+							await this.plugin.saveSettings();
+						} else {
+							templateSetting.setClass('invalid-path');
+						}
+					}));
+		}
 	}
 }
