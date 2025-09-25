@@ -8,6 +8,7 @@ interface DailyFolderSettings {
 	root: string;
 	useTemplate: boolean;
 	template: string;
+	dateFormat: string;
 }
 
 const DEFAULT_SETTINGS: DailyFolderSettings = {
@@ -15,7 +16,8 @@ const DEFAULT_SETTINGS: DailyFolderSettings = {
 	description: true,
 	root: '',
 	useTemplate: true,
-	template: ''
+	template: '',
+	dateFormat: ''
 };
 
 export default class DailyNamedFolderPlugin extends Plugin {
@@ -118,11 +120,18 @@ export default class DailyNamedFolderPlugin extends Plugin {
 	}
 
 	processTemplate(rawTemplate: string): string {
+		//console.log("processTemplate: " + rawTemplate);
 		const template = rawTemplate.replace(/({{[^}]+}})/g, (match) => {
 			// remove marker characters
 			const cleaned = match.replace("{{", "").replace("}}", "").replace("date:", "");
 			// now use Moment.js to format the string
-			return moment().format(cleaned)
+			if (cleaned && cleaned.length > 0 && cleaned !== 'date') {
+				console.log("Uses old formatter: " + cleaned);
+				return moment().format(cleaned)
+			} else {
+				console.log("Uses format: " + this.settings.dateFormat);
+				return moment().format(this.settings.dateFormat);
+			}
 		});
 		return template
 	}
@@ -414,6 +423,18 @@ class DailyFolderSettingTab extends PluginSettingTab {
 
 					// Re-render the settings page
 					this.display();
+				}));
+
+		new Setting(containerEl)
+			.setName("Date format in text")
+			.setDesc("Use {{date}} template inside template file for substitution with current date")
+			.addText(text => text
+				.setPlaceholder('Ex: YYYYMMDD')
+				.setValue(this.plugin.settings.dateFormat)
+				.onChange(async (value) => {
+					//console.log('[DATE FORMAT] format set: ' + value);
+					this.plugin.settings.dateFormat = value;
+					await this.plugin.saveSettings();
 				}));
 
 		if (this.plugin.settings.useTemplate){
