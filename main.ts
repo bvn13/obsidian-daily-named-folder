@@ -123,14 +123,32 @@ export default class DailyNamedFolderPlugin extends Plugin {
 		//console.log("processTemplate: " + rawTemplate);
 		const template = rawTemplate.replace(/({{[^}]+}})/g, (match) => {
 			// remove marker characters
-			const cleaned = match.replace("{{", "").replace("}}", "").replace("date:", "");
+			let cleaned = match.replace("{{", "").replace("}}", "");
+			const parts = cleaned.split(":");
+			let date = parts[0];
+			if (parts.length == 0) {
+				console.log("ERROR: has no date to substitute");
+				return;
+			}
+			let dateFormat = this.settings.dateFormat;
+			if (parts.length > 1) {
+				dateFormat = parts[1];
+			}
+			while (date.indexOf(" ")>=0) {
+				date = date.replace(" ", "");
+			}
 			// now use Moment.js to format the string
-			if (cleaned && cleaned.length > 0 && cleaned !== 'date') {
-				console.log("Uses old formatter: " + cleaned);
-				return moment().format(cleaned)
+			if (date && date.length > 0 && date === 'date') {
+				console.log("Uses format: " + dateFormat);
+				return moment().format(dateFormat);
+			} else if (date && date.length > 0 && date.startsWith("date+")) {
+				date = date.replace("date+", "");
+				const days = parseInt(date);
+				console.log("Uses format: " + dateFormat);
+				return moment().add(days, 'days').format(dateFormat);
 			} else {
-				console.log("Uses format: " + this.settings.dateFormat);
-				return moment().format(this.settings.dateFormat);
+				console.log("Uses old formatter: " + date);
+				return moment().format(date)
 			}
 		});
 		return template
